@@ -1,5 +1,1 @@
-TAGS
-tags
-.*.swp
-tomlcheck/tomlcheck
-toml.test
+test_program/test_program_bin

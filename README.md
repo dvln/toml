@@ -1,220 +1,120 @@
-## TOML parser and encoder for Go with reflection
+# go-toml
 
-TOML stands for Tom's Obvious, Minimal Language. This Go package provides a
-reflection interface similar to Go's standard library `json` and `xml` 
-packages. This package also supports the `encoding.TextUnmarshaler` and
-`encoding.TextMarshaler` interfaces so that you can define custom data 
-representations. (There is an example of this below.)
+Go library for the [TOML](https://github.com/mojombo/toml) format.
 
-Spec: https://github.com/mojombo/toml
+This library supports TOML version
+[v0.4.0](https://github.com/toml-lang/toml/blob/master/versions/en/toml-v0.4.0.md)
 
-Compatible with TOML version
-[v0.2.0](https://github.com/toml-lang/toml/blob/master/versions/en/toml-v0.2.0.md)
+[![GoDoc](https://godoc.org/github.com/pelletier/go-toml?status.svg)](http://godoc.org/github.com/pelletier/go-toml)
+[![License](https://img.shields.io/badge/license-MIT-blue.svg)](https://github.com/goadesign/goa/blob/master/LICENSE)
+[![Build Status](https://travis-ci.org/pelletier/go-toml.svg?branch=master)](https://travis-ci.org/pelletier/go-toml)
+[![Coverage Status](https://coveralls.io/repos/github/pelletier/go-toml/badge.svg?branch=master)](https://coveralls.io/github/pelletier/go-toml?branch=master)
+[![Go Report Card](https://goreportcard.com/badge/github.com/pelletier/go-toml)](https://goreportcard.com/report/github.com/pelletier/go-toml)
 
-Documentation: http://godoc.org/github.com/BurntSushi/toml
+## Features
 
-Installation:
+Go-toml provides the following features for using data parsed from TOML documents:
 
-```bash
-go get github.com/BurntSushi/toml
-```
+* Load TOML documents from files and string data
+* Easily navigate TOML structure using TomlTree
+* Line & column position data for all parsed elements
+* Query support similar to JSON-Path
+* Syntax errors contain line and column numbers
 
-Try the toml validator:
+Go-toml is designed to help cover use-cases not covered by reflection-based TOML parsing:
 
-```bash
-go get github.com/BurntSushi/toml/cmd/tomlv
-tomlv some-toml-file.toml
-```
+* Semantic evaluation of parsed TOML
+* Informing a user of mistakes in the source document, after it has been parsed
+* Programatic handling of default values on a case-by-case basis
+* Using a TOML document as a flexible data-store
 
-[![Build status](https://api.travis-ci.org/BurntSushi/toml.png)](https://travis-ci.org/BurntSushi/toml)
+## Import
 
+    import "github.com/pelletier/go-toml"
 
-### Testing
+## Usage
 
-This package passes all tests in
-[toml-test](https://github.com/BurntSushi/toml-test) for both the decoder
-and the encoder.
+### Example
 
-### Examples
-
-This package works similarly to how the Go standard library handles `XML`
-and `JSON`. Namely, data is loaded into Go values via reflection.
-
-For the simplest example, consider some TOML file as just a list of keys
-and values:
+Say you have a TOML file that looks like this:
 
 ```toml
-Age = 25
-Cats = [ "Cauchy", "Plato" ]
-Pi = 3.14
-Perfection = [ 6, 28, 496, 8128 ]
-DOB = 1987-07-05T05:45:00Z
+[postgres]
+user = "pelletier"
+password = "mypassword"
 ```
 
-Which could be defined in Go as:
+Read the username and password like this:
 
 ```go
-type Config struct {
-  Age int
-  Cats []string
-  Pi float64
-  Perfection []int
-  DOB time.Time // requires `import time`
+import (
+    "fmt"
+    "github.com/pelletier/go-toml"
+)
+
+config, err := toml.LoadFile("config.toml")
+if err != nil {
+    fmt.Println("Error ", err.Error())
+} else {
+    // retrieve data directly
+    user := config.Get("postgres.user").(string)
+    password := config.Get("postgres.password").(string)
+
+    // or using an intermediate object
+    configTree := config.Get("postgres").(*toml.TomlTree)
+    user = configTree.Get("user").(string)
+    password = configTree.Get("password").(string)
+    fmt.Println("User is ", user, ". Password is ", password)
+
+    // show where elements are in the file
+    fmt.Println("User position: %v", configTree.GetPosition("user"))
+    fmt.Println("Password position: %v", configTree.GetPosition("password"))
+
+    // use a query to gather elements without walking the tree
+    results, _ := config.Query("$..[user,password]")
+    for ii, item := range results.Values() {
+      fmt.Println("Query result %d: %v", ii, item)
+    }
 }
 ```
 
-And then decoded with:
+## Documentation
 
-```go
-var conf Config
-if _, err := toml.Decode(tomlData, &conf); err != nil {
-  // handle error
-}
-```
+The documentation and additional examples are available at
+[godoc.org](http://godoc.org/github.com/pelletier/go-toml).
 
-You can also use struct tags if your struct field name doesn't map to a TOML
-key value directly:
+## Tools
 
-```toml
-some_key_NAME = "wat"
-```
+Go-toml provides two handy command line tools:
 
-```go
-type TOML struct {
-  ObscureKey string `toml:"some_key_NAME"`
-}
-```
+* `tomll`: Reads TOML files and lint them.
 
-### Using the `encoding.TextUnmarshaler` interface
+    ```
+    go install github.com/pelletier/go-toml/cmd/tomll
+    tomll --help
+    ```
+* `tomljson`: Reads a TOML file and outputs its JSON representation.
 
-Here's an example that automatically parses duration strings into 
-`time.Duration` values:
+    ```
+    go install github.com/pelletier/go-toml/cmd/tomjson
+    tomljson --help
+    ```
 
-```toml
-[[song]]
-name = "Thunder Road"
-duration = "4m49s"
+## Contribute
 
-[[song]]
-name = "Stairway to Heaven"
-duration = "8m03s"
-```
+Feel free to report bugs and patches using GitHub's pull requests system on
+[pelletier/go-toml](https://github.com/pelletier/go-toml). Any feedback would be
+much appreciated!
 
-Which can be decoded with:
+### Run tests
 
-```go
-type song struct {
-  Name     string
-  Duration duration
-}
-type songs struct {
-  Song []song
-}
-var favorites songs
-if _, err := toml.Decode(blob, &favorites); err != nil {
-  log.Fatal(err)
-}
+You have to make sure two kind of tests run:
 
-for _, s := range favorites.Song {
-  fmt.Printf("%s (%s)\n", s.Name, s.Duration)
-}
-```
+1. The Go unit tests
+2. The TOML examples base
 
-And you'll also need a `duration` type that satisfies the 
-`encoding.TextUnmarshaler` interface:
+You can run both of them using `./test.sh`.
 
-```go
-type duration struct {
-	time.Duration
-}
+## License
 
-func (d *duration) UnmarshalText(text []byte) error {
-	var err error
-	d.Duration, err = time.ParseDuration(string(text))
-	return err
-}
-```
-
-### More complex usage
-
-Here's an example of how to load the example from the official spec page:
-
-```toml
-# This is a TOML document. Boom.
-
-title = "TOML Example"
-
-[owner]
-name = "Tom Preston-Werner"
-organization = "GitHub"
-bio = "GitHub Cofounder & CEO\nLikes tater tots and beer."
-dob = 1979-05-27T07:32:00Z # First class dates? Why not?
-
-[database]
-server = "192.168.1.1"
-ports = [ 8001, 8001, 8002 ]
-connection_max = 5000
-enabled = true
-
-[servers]
-
-  # You can indent as you please. Tabs or spaces. TOML don't care.
-  [servers.alpha]
-  ip = "10.0.0.1"
-  dc = "eqdc10"
-
-  [servers.beta]
-  ip = "10.0.0.2"
-  dc = "eqdc10"
-
-[clients]
-data = [ ["gamma", "delta"], [1, 2] ] # just an update to make sure parsers support it
-
-# Line breaks are OK when inside arrays
-hosts = [
-  "alpha",
-  "omega"
-]
-```
-
-And the corresponding Go types are:
-
-```go
-type tomlConfig struct {
-	Title string
-	Owner ownerInfo
-	DB database `toml:"database"`
-	Servers map[string]server
-	Clients clients
-}
-
-type ownerInfo struct {
-	Name string
-	Org string `toml:"organization"`
-	Bio string
-	DOB time.Time
-}
-
-type database struct {
-	Server string
-	Ports []int
-	ConnMax int `toml:"connection_max"`
-	Enabled bool
-}
-
-type server struct {
-	IP string
-	DC string
-}
-
-type clients struct {
-	Data [][]interface{}
-	Hosts []string
-}
-```
-
-Note that a case insensitive match will be tried if an exact match can't be
-found.
-
-A working example of the above can be found in `_examples/example.{go,toml}`.
-
+The MIT License (MIT). Read [LICENSE](LICENSE).
